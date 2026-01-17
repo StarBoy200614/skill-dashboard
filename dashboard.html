@@ -2023,33 +2023,139 @@
         });
 
         // Handle form submission
-        loginForm.addEventListener('submit', (e) => {
+        loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             
             const email = loginForm.querySelector('input[type="email"]').value;
             const password = loginForm.querySelector('input[type="password"]').value;
             const rememberMe = document.getElementById('rememberMe').checked;
 
-            console.log('Login Data:', { email, password, rememberMe });
-            
-            // Here you would typically send this to your backend
-            // Example:
-            // fetch('/api/login', {
-            //     method: 'POST',
-            //     headers: { 'Content-Type': 'application/json' },
-            //     body: JSON.stringify({ email, password, rememberMe })
-            // })
-            // .then(response => response.json())
-            // .then(data => {
-            //     if (data.success) {
-            //         window.location.href = '/dashboard';
-            //     }
-            // });
+            // Disable submit button during request
+            const submitBtn = loginForm.querySelector('.btn-submit');
+            const originalText = submitBtn.textContent;
+            submitBtn.textContent = 'Logging in...';
+            submitBtn.disabled = true;
 
-            alert('Login functionality will be connected to backend!');
-            loginModal.classList.remove('active');
-            document.body.style.overflow = 'auto';
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email, password, rememberMe })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Success - close modal and reload dashboard data
+                    loginModal.classList.remove('active');
+                    document.body.style.overflow = 'auto';
+                    
+                    // Show success message
+                    alert('Login successful! Welcome back!');
+                    
+                    // Load dashboard data
+                    loadDashboardData();
+                } else {
+                    // Show error message
+                    alert(data.message || 'Login failed. Please try again.');
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                alert('An error occurred. Please try again.');
+            } finally {
+                // Re-enable submit button
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
+            }
         });
+
+        // Load Dashboard Data for logged-in user
+        async function loadDashboardData() {
+            try {
+                const response = await fetch('/api/dashboard-data');
+                const data = await response.json();
+
+                if (data.success) {
+                    // Update stats cards
+                    const stats = data.stats;
+                    document.querySelectorAll('.stat-card').forEach((card, index) => {
+                        const numberElement = card.querySelector('.stat-number');
+                        let value;
+                        
+                        switch(index) {
+                            case 0:
+                                value = stats.skill_readiness;
+                                numberElement.setAttribute('data-target', value);
+                                numberElement.textContent = value + '%';
+                                break;
+                            case 1:
+                                value = stats.verified_skills;
+                                numberElement.setAttribute('data-target', value);
+                                numberElement.textContent = value;
+                                break;
+                            case 2:
+                                value = stats.total_xp;
+                                numberElement.setAttribute('data-target', value);
+                                numberElement.textContent = value.toLocaleString();
+                                break;
+                            case 3:
+                                value = stats.certifications;
+                                numberElement.setAttribute('data-target', value);
+                                numberElement.textContent = value;
+                                break;
+                        }
+                    });
+
+                    // Update challenges if available
+                    if (data.challenges && data.challenges.length > 0) {
+                        updateChallenges(data.challenges);
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading dashboard data:', error);
+            }
+        }
+
+        // Update challenges dynamically
+        function updateChallenges(challenges) {
+            const challengesGrid = document.querySelector('.challenges-grid');
+            challengesGrid.innerHTML = '';
+
+            challenges.forEach((challenge, index) => {
+                const difficultyClass = `difficulty-${challenge.difficulty.toLowerCase()}`;
+                
+                const challengeHTML = `
+                    <div class="challenge-card scroll-reveal" style="transition-delay: ${(index + 1) * 0.1}s;">
+                        <div class="challenge-header">
+                            <h3 class="challenge-title">${challenge.title}</h3>
+                        </div>
+                        <div class="challenge-meta">
+                            <div class="meta-item">
+                                <span class="meta-label">Employer</span>
+                                <span class="meta-value">${challenge.company}</span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-label">Domain</span>
+                                <span class="meta-value">${challenge.domain}</span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-label">Difficulty</span>
+                                <span class="difficulty-badge ${difficultyClass}">${challenge.difficulty}</span>
+                            </div>
+                            <div class="meta-item">
+                                <span class="meta-label">Deadline</span>
+                                <span class="meta-value">${challenge.deadline}</span>
+                            </div>
+                        </div>
+                        <button class="challenge-button">${challenge.status}</button>
+                    </div>
+                `;
+                
+                challengesGrid.insertAdjacentHTML('beforeend', challengeHTML);
+            });
+        }
 
         // Social login buttons
         document.querySelectorAll('.btn-social').forEach(btn => {
@@ -2201,12 +2307,23 @@
             surveyResults.classList.add('active');
             progressFill.style.width = '100%';
             
-            // Here you would send answers to backend
-            // fetch('/api/submit-survey', {
-            //     method: 'POST',
-            //     headers: { 'Content-Type': 'application/json' },
-            //     body: JSON.stringify(answers)
-            // });
+            // Send to backend
+            fetch('/api/submit-survey', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(answers)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    console.log('Survey submitted successfully:', data);
+                } else {
+                    console.error('Survey submission failed:', data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error submitting survey:', error);
+            });
         }
 
         // View results button
